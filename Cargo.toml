@@ -1,8 +1,8 @@
 [package]
-name = "dynvec"
+name = "dynstack"
 version = "0.1.0"
 authors = ["Gui Andrade <gh@archshift.com>"]
-description = "A Vec for trait objects that minimizes allocations"
+description = "A stack for trait objects that minimizes allocations"
 license = "MIT"
 
 [dependencies]

@@ -49,32 +49,32 @@ fn test_align_up() {
 
 
 /// Iterator over trait object references
-pub struct DynVecIter<'a, T: 'a + ?Sized> {
-    vec: &'a DynVec<T>,
+pub struct DynStackIter<'a, T: 'a + ?Sized> {
+    stack: &'a DynStack<T>,
     index: usize,
 }
 
-impl<'a, T: 'a + ?Sized> Iterator for DynVecIter<'a, T> {
+impl<'a, T: 'a + ?Sized> Iterator for DynStackIter<'a, T> {
     type Item = &'a T;
     fn next(&mut self) -> Option<&'a T> {
-        self.vec.get(self.index)
+        self.stack.get(self.index)
             .map(|out| {self.index += 1; out})
     }
 }
 
 
 /// Iterator over mutable trait object references
-pub struct DynVecIterMut<'a, T: 'a + ?Sized> {
-    vec: *mut DynVec<T>,
+pub struct DynStackIterMut<'a, T: 'a + ?Sized> {
+    stack: *mut DynStack<T>,
     index: usize,
-    _spooky: PhantomData<&'a mut DynVec<T>>
+    _spooky: PhantomData<&'a mut DynStack<T>>
 }
 
-impl<'a, T: 'a + ?Sized> Iterator for DynVecIterMut<'a, T> {
+impl<'a, T: 'a + ?Sized> Iterator for DynStackIterMut<'a, T> {
     type Item = &'a mut T;
     fn next(&mut self) -> Option<&'a mut T> {
         unsafe {
-            (*self.vec).get_mut(self.index)
+            (*self.stack).get_mut(self.index)
                 .map(|out| {self.index += 1; out})
         }
     }
@@ -82,7 +82,8 @@ impl<'a, T: 'a + ?Sized> Iterator for DynVecIterMut<'a, T> {
 
 
 
-pub struct DynVec<T: ?Sized> {
+
+pub struct DynStack<T: ?Sized> {
     offs_table: Vec<(usize, usize)>,
     dyn_data: *mut u8,
     dyn_size: usize,
@@ -90,7 +91,7 @@ pub struct DynVec<T: ?Sized> {
     _spooky: PhantomData<T>,
 }
 
-impl<T: ?Sized> DynVec<T> {
+impl<T: ?Sized> DynStack<T> {
     fn base_layout() -> Layout {
         unsafe { Layout::from_size_align_unchecked(16, 16) }
     }
@@ -105,24 +106,24 @@ impl<T: ?Sized> DynVec<T> {
         }
     }
     
-    /// Double the vector's capacity
+    /// Double the stack's capacity
     fn grow(&mut self) {
         self.dyn_cap *= 2;
         self.dyn_data = unsafe { realloc(self.dyn_data, Self::base_layout(), self.dyn_cap) };
     }
 
-    /// Push a trait object onto the vec.
+    /// Push a trait object onto the stack.
     ///
     /// This method is unsafe because in lieu of moving a trait object onto `push`'s stack
-    /// (not possible in rust as of 1.30.0) we copy it from the provided mutable reference.
+    /// (not possible in rust as of 1.30.0) we copy it from the provided mutable pointer.
     /// 
-    /// The user of this method must therefore ensure that `item` either has no `Drop` impl,
+    /// The user of this method must therefore either ensure that `item` has no `Drop` impl,
     /// or explicitly call `std::mem::forget` on `item` after pushing.
     ///
     /// It is highly recommended to use the `dyn_push` macro instead of calling this directly.
-    pub unsafe fn push(&mut self, item: &mut T) {
-        let size = mem::size_of_val(item);
-        let align = mem::align_of_val(item);
+    pub unsafe fn push(&mut self, item: *mut T) {
+        let size = mem::size_of_val(&*item);
+        let align = mem::align_of_val(&*item);
 
         let curr_ptr = self.dyn_data as usize + self.dyn_size;
         let aligned_ptr = align_up(curr_ptr, align);
@@ -134,7 +135,7 @@ impl<T: ?Sized> DynVec<T> {
         self.dyn_data
             .add(self.dyn_size)
             .add(align_offs)
-            .copy_from_nonoverlapping(item as *const T as *const u8, size);
+            .copy_from_nonoverlapping(item as *const u8, size);
         
         let ptr_components = decomp_fat(item);
         self.offs_table.push((self.dyn_size + align_offs, ptr_components[1]));
@@ -165,19 +166,19 @@ impl<T: ?Sized> DynVec<T> {
     }
 }
 
-impl<'a, T: 'a + ?Sized> DynVec<T> {
+impl<'a, T: 'a + ?Sized> DynStack<T> {
     /// Returns an iterator over trait object references
-    fn iter(&'a self) -> DynVecIter<'a, T> {
-        DynVecIter {
-            vec: self,
+    fn iter(&'a self) -> DynStackIter<'a, T> {
+        DynStackIter {
+            stack: self,
             index: 0
         }
     }
 
     /// Returns an iterator over mutable trait object references
-    fn iter_mut(&'a mut self) -> DynVecIterMut<'a, T> {
-        DynVecIterMut {
-            vec: self,
+    fn iter_mut(&'a mut self) -> DynStackIterMut<'a, T> {
+        DynStackIterMut {
+            stack: self,
             index: 0,
             _spooky: PhantomData
         }
@@ -185,18 +186,18 @@ impl<'a, T: 'a + ?Sized> DynVec<T> {
 }
 
 
-impl<'a, T: 'a + ?Sized> IntoIterator for &'a DynVec<T> {
+impl<'a, T: 'a + ?Sized> IntoIterator for &'a DynStack<T> {
     type Item = &'a T;
-    type IntoIter = DynVecIter<'a, T>;
+    type IntoIter = DynStackIter<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl<'a, T: 'a + ?Sized> IntoIterator for &'a mut DynVec<T> {
+impl<'a, T: 'a + ?Sized> IntoIterator for &'a mut DynStack<T> {
     type Item = &'a mut T;
-    type IntoIter = DynVecIterMut<'a, T>;
+    type IntoIter = DynStackIterMut<'a, T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
@@ -204,7 +205,7 @@ impl<'a, T: 'a + ?Sized> IntoIterator for &'a mut DynVec<T> {
 }
 
 
-impl<T: ?Sized> Drop for DynVec<T> {
+impl<T: ?Sized> Drop for DynStack<T> {
     fn drop(&mut self) {
         for item in self.iter_mut() {
             unsafe { ptr::drop_in_place(item) };
@@ -216,12 +217,13 @@ impl<T: ?Sized> Drop for DynVec<T> {
 
 
 
+/// Push an item onto the back of the specified stack
 #[macro_export]
 macro_rules! dyn_push {
-    { $vec:expr, $item:expr } => {{
+    { $stack:expr, $item:expr } => {{
         let mut t = $item;
 
-        unsafe { $vec.push(&mut t) };
+        unsafe { $stack.push(&mut t) };
         ::std::mem::forget(t);
     }}
 }
@@ -231,21 +233,39 @@ macro_rules! dyn_push {
 #[test]
 fn test_push_get() {
     use std::fmt::Debug;
-    let mut vec = DynVec::<Debug>::new();
+    let mut stack = DynStack::<Debug>::new();
     let bunch = vec![1u32, 2, 3, 4, 5, 6, 7, 8, 9];
-    dyn_push!(vec, 1u8);
-    dyn_push!(vec, 1u32);
-    dyn_push!(vec, 1u16);
-    dyn_push!(vec, 1u64);
-    dyn_push!(vec, bunch);
+    dyn_push!(stack, 1u8);
+    dyn_push!(stack, 1u32);
+    dyn_push!(stack, 1u16);
+    dyn_push!(stack, 1u64);
+    dyn_push!(stack, bunch);
+    dyn_push!(stack, { #[derive(Debug)] struct ZST; ZST });
     
     for i in 0..4 {
-        println!("{:?}", vec.get(i).unwrap());
-        assert!(format!("{:?}", vec.get(i).unwrap()) == "1");
+        println!("{:?}", stack.get(i).unwrap());
+        assert!(format!("{:?}", stack.get(i).unwrap()) == "1");
     }
 
-    println!("{:?}", vec.get(4).unwrap());
-    assert!(format!("{:?}", vec.get(4).unwrap()) == "[1, 2, 3, 4, 5, 6, 7, 8, 9]");
+    println!("{:?}", stack.get(4).unwrap());
+    assert!(format!("{:?}", stack.get(4).unwrap()) == "[1, 2, 3, 4, 5, 6, 7, 8, 9]");
+
+    println!("{:?}", stack.get(5).unwrap());
+    assert!(format!("{:?}", stack.get(5).unwrap()) == "ZST");
+}
+
+#[test]
+fn test_fn() {
+    let mut stack = DynStack::<Fn() -> usize>::new();
+    for i in 0..100 {
+        dyn_push!(stack, move || i);
+    }
+
+    let mut item2 = 0;
+    for func in stack.iter() {
+        item2 += func();
+    }
+    assert_eq!(item2, 4950);
 }
 
 #[test]
@@ -267,13 +287,13 @@ fn test_drop() {
     }
 
     {
-        let mut vec = DynVec::<Any>::new();
-        dyn_push!(vec, Droppable{counter: 1});
-        dyn_push!(vec, Droppable{counter: 2});
-        dyn_push!(vec, Droppable{counter: 3});
-        dyn_push!(vec, Droppable{counter: 4});
-        dyn_push!(vec, Droppable{counter: 5});
-        dyn_push!(vec, Droppable{counter: 6});
+        let mut stack = DynStack::<Any>::new();
+        dyn_push!(stack, Droppable{counter: 1});
+        dyn_push!(stack, Droppable{counter: 2});
+        dyn_push!(stack, Droppable{counter: 3});
+        dyn_push!(stack, Droppable{counter: 4});
+        dyn_push!(stack, Droppable{counter: 5});
+        dyn_push!(stack, Droppable{counter: 6});
         assert!(drop_num().is_empty());
     }
 

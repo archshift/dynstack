@@ -1,3 +1,3 @@
-# dynvec
+# dynstack
 
-## A `Vec` for trait objects that minimizes allocations
+## A stack for trait objects that minimizes allocations
