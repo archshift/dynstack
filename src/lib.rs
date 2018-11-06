@@ -143,26 +143,47 @@ impl<T: ?Sized> DynStack<T> {
         self.dyn_size += align_offs + size;
     }
 
+    /// Remove the last trait object from the stack.
+    /// Returns true if any items were removed.
+    pub fn remove_last(&mut self) -> bool {
+        if let Some((last_offs, _)) = self.offs_table.pop() {
+            self.dyn_size = last_offs;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Retrieve a trait object reference at the provided index.
     pub fn get<'a>(&'a self, index: usize) -> Option<&'a T> {
-        if let Some(item) = self.offs_table.get(index) {
-            let components = [self.dyn_data as usize + item.0, item.1];
-            let out = unsafe { &*recomp_fat(components) };
-            Some(out)
-        } else {
-            None
-        }
+        let item = self.offs_table.get(index)?;
+        let components = [self.dyn_data as usize + item.0, item.1];
+        let out = unsafe { &*recomp_fat(components) };
+        Some(out)
     }
 
     /// Retrieve a mutable trait object reference at the provided index.
     pub fn get_mut<'a>(&'a mut self, index: usize) -> Option<&'a mut T> {
-        if let Some(item) = self.offs_table.get(index) {
-            let components = [self.dyn_data as usize + item.0, item.1];
-            let out = unsafe { &mut *recomp_fat_mut(components) };
-            Some(out)
-        } else {
-            None
-        }
+        let item = self.offs_table.get(index)?;
+        let components = [self.dyn_data as usize + item.0, item.1];
+        let out = unsafe { &mut *recomp_fat_mut(components) };
+        Some(out)
+    }
+
+    /// Retrieve the trait object reference at the top of the stack.
+    pub fn peek<'a>(&'a self) -> Option<&'a T> {
+        self.get(self.len() - 1)
+    }
+
+    /// Retrieve the mutable trait object reference at the top of the stack.
+    pub fn peek_mut<'a>(&'a mut self) -> Option<&'a mut T> {
+        let index = self.len() - 1;
+        self.get_mut(index)
+    }
+
+    /// Returns the number of trait objects stored on the stack.
+    pub fn len(&self) -> usize {
+        self.offs_table.len()
     }
 }
 
@@ -231,7 +252,7 @@ macro_rules! dyn_push {
 
 
 #[test]
-fn test_push_get() {
+fn test_push_pop() {
     use std::fmt::Debug;
     let mut stack = DynStack::<Debug>::new();
     let bunch = vec![1u32, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -242,16 +263,32 @@ fn test_push_get() {
     dyn_push!(stack, bunch);
     dyn_push!(stack, { #[derive(Debug)] struct ZST; ZST });
     
-    for i in 0..4 {
-        println!("{:?}", stack.get(i).unwrap());
-        assert!(format!("{:?}", stack.get(i).unwrap()) == "1");
+    if let Some(item) = stack.peek() {
+        println!("{:?}", item);
+        assert!(format!("{:?}", item) == "ZST");
+    } else {
+        unreachable!();
+    }
+    assert!( stack.remove_last() );
+
+    if let Some(item) = stack.peek() {
+        println!("{:?}", item);
+        assert!(format!("{:?}", item) == "[1, 2, 3, 4, 5, 6, 7, 8, 9]");
+    }
+    assert!( stack.remove_last() );
+
+    for _i in 0..4 {
+        if let Some(item) = stack.peek() {
+            println!("{:?}", item);
+            assert!(format!("{:?}", item) == "1");
+        } else {
+            unreachable!();
+        }
+        assert!( stack.remove_last() );
     }
 
-    println!("{:?}", stack.get(4).unwrap());
-    assert!(format!("{:?}", stack.get(4).unwrap()) == "[1, 2, 3, 4, 5, 6, 7, 8, 9]");
-
-    println!("{:?}", stack.get(5).unwrap());
-    assert!(format!("{:?}", stack.get(5).unwrap()) == "ZST");
+    assert!( stack.len() == 0 );
+    assert!( stack.dyn_size == 0 );
 }
 
 #[test]

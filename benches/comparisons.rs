@@ -63,11 +63,44 @@ fn push_and_run_dynstack(b: &mut Bencher) {
     });
 }
 
+fn pseudorecursive2_naive(b: &mut Bencher) {
+    b.iter(|| {
+        let mut state: Box<Fn() -> usize> = Box::new(|| 0);
+        fn pseudorecursive(state: &mut Box<Fn() -> usize>, n: usize) {
+            *state = Box::new(move || n - 1);
+        }
+
+        let mut n = 100;
+        while n > 0 {
+            pseudorecursive(&mut state, n);
+            n = state();
+        }
+    });
+}
+
+fn pseudorecursive2_dynstack(b: &mut Bencher) {
+    b.iter(|| {
+        let mut stack = DynStack::<Fn() -> usize>::new();
+        fn pseudorecursive(stack: &mut DynStack<Fn() -> usize>, n: usize) {
+            dyn_push!(stack, move || n - 1);
+        }
+
+        let mut n = 100;
+        while n > 0 {
+            pseudorecursive(&mut stack, n);
+            n = (stack.peek().unwrap())();
+            stack.remove_last();
+        }
+    });
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("push_speed_naive", push_speed_naive);
     c.bench_function("push_speed_dynstack", push_speed_dynstack);
     c.bench_function("push_and_run_naive", push_and_run_naive);
     c.bench_function("push_and_run_dynstack", push_and_run_dynstack);
+    c.bench_function("pseudorecursive2_naive", pseudorecursive2_naive);
+    c.bench_function("pseudorecursive2_dynstack", pseudorecursive2_dynstack);
 }
 
 criterion_group!(benches, criterion_benchmark);
