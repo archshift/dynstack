@@ -1,7 +1,32 @@
+//! 
+//! `dynstack` can mostly replace anywhere you'd use a stack, or a vector that doesn't
+//! require removal from its center.
+//!
+//! ```
+//! # use dynstack::{DynStack, dyn_push};
+//! # use std::fmt::Debug;
+//! let mut stack = DynStack::<Debug>::new();
+//! dyn_push!(stack, "hello, world!");
+//! dyn_push!(stack, 0usize);
+//! dyn_push!(stack, [1, 2, 3, 4, 5, 6]);
+//! 
+//! for item in stack.iter() {
+//!     println!("{:?}", item);
+//! }
+//!
+//! // prints:
+//! //  "hello, world!"
+//! //  0
+//! //  [1, 2, 3, 4, 5, 6]
+//! ```
+
+
+
 use std::alloc::{alloc, dealloc, realloc, Layout};
 use std::mem;
 use std::marker::PhantomData;
 use std::ptr;
+use std::ops::{Index, IndexMut};
 
 
 
@@ -189,7 +214,7 @@ impl<T: ?Sized> DynStack<T> {
 
 impl<'a, T: 'a + ?Sized> DynStack<T> {
     /// Returns an iterator over trait object references
-    fn iter(&'a self) -> DynStackIter<'a, T> {
+    pub fn iter(&'a self) -> DynStackIter<'a, T> {
         DynStackIter {
             stack: self,
             index: 0
@@ -197,12 +222,27 @@ impl<'a, T: 'a + ?Sized> DynStack<T> {
     }
 
     /// Returns an iterator over mutable trait object references
-    fn iter_mut(&'a mut self) -> DynStackIterMut<'a, T> {
+    pub fn iter_mut(&'a mut self) -> DynStackIterMut<'a, T> {
         DynStackIterMut {
             stack: self,
             index: 0,
             _spooky: PhantomData
         }
+    }
+}
+
+
+impl<T: ?Sized> Index<usize> for DynStack<T> {
+    type Output = T;
+
+    fn index(&self, idx: usize) -> &T {
+        self.get(idx).unwrap()
+    }
+}
+
+impl<T: ?Sized> IndexMut<usize> for DynStack<T> {
+    fn index_mut(&mut self, idx: usize) -> &mut T {
+        self.get_mut(idx).unwrap()
     }
 }
 

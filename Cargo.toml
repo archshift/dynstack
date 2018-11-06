@@ -3,6 +3,7 @@ name = "dynstack"
 version = "0.1.0"
 authors = ["Gui Andrade <gh@archshift.com>"]
 description = "A stack for trait objects that minimizes allocations"
+repository = "https://github.com/archshift/dynstack"
 license = "MIT"
 
 [dev-dependencies]
