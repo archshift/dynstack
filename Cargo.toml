@@ -5,4 +5,9 @@ authors = ["Gui Andrade <gh@archshift.com>"]
 description = "A stack for trait objects that minimizes allocations"
 license = "MIT"
 
-[dependencies]
+[dev-dependencies]
+criterion = "0.1.2"
+
+[[bench]]
+name = "comparisons"
+harness = false
