@@ -2,6 +2,9 @@
 
 ## A stack for trait objects that minimizes allocations
 
+**COMPATIBILITY NOTE:** `dynstack` relies on an underspecified fat pointer representation. Though
+it isn't expected to change in the foreseeable future, this crate expects Rust 1.32's representation.
+
 ### Usage
 
 `dynstack` can mostly replace anywhere you'd use a stack, or a vector that doesn't
