@@ -22,7 +22,7 @@
 
 
 
-use std::alloc::{alloc, dealloc, realloc, Layout};
+use std::alloc::{alloc, dealloc, Layout};
 use std::mem;
 use std::marker::PhantomData;
 use std::ptr;
@@ -113,28 +113,84 @@ pub struct DynStack<T: ?Sized> {
     dyn_data: *mut u8,
     dyn_size: usize,
     dyn_cap: usize,
+    max_align: usize,
     _spooky: PhantomData<T>,
 }
 
 impl<T: ?Sized> DynStack<T> {
-    fn base_layout() -> Layout {
-        unsafe { Layout::from_size_align_unchecked(16, 16) }
+    fn make_layout(cap: usize) -> Layout {
+        unsafe { Layout::from_size_align_unchecked(cap, 16) }
+    }
+    fn layout(&self) -> Layout {
+        Self::make_layout(self.dyn_cap)
     }
 
     pub fn new() -> Self {
         Self {
             offs_table: Vec::new(),
-            dyn_data: unsafe { alloc(Self::base_layout()) },
+            dyn_data: unsafe { alloc(Self::make_layout(16)) },
             dyn_size: 0,
             dyn_cap: 16,
+            max_align: 16,
             _spooky: PhantomData
         }
+    }
+
+    #[cfg(test)]
+    fn reallocate(&mut self, new_cap: usize) {
+        let old_layout = self.layout();
+        self.dyn_cap = new_cap;
+        unsafe {
+            // The point of this is to maximize the chances of having changed alignment
+            // characteristics, for testing purposes.
+            let new_data = alloc(self.layout());
+            ptr::copy_nonoverlapping(self.dyn_data, new_data, self.dyn_size);
+            dealloc(self.dyn_data, old_layout);
+            self.dyn_data = new_data;
+        }
+    }
+
+    #[cfg(not(test))]
+    fn reallocate(&mut self, new_cap: usize) {
+        use std::alloc::realloc;
+        self.dyn_cap = new_cap;
+        self.dyn_data = unsafe { realloc(self.dyn_data, self.layout(), self.dyn_cap) };
     }
     
     /// Double the stack's capacity
     fn grow(&mut self) {
-        self.dyn_cap *= 2;
-        self.dyn_data = unsafe { realloc(self.dyn_data, Self::base_layout(), self.dyn_cap) };
+        let align_mask = self.max_align - 1;
+        let prev_align = self.dyn_data as usize & align_mask;
+
+        let new_cap = self.dyn_cap * 2;
+        self.reallocate(new_cap);
+        
+        let new_align = self.dyn_data as usize & align_mask;
+        let mut align_diff = (new_align as isize) - (prev_align as isize);
+
+        if align_diff != 0 {
+            // It's possible that, if we have an item with alignment > 16, it becomes unaligned when
+            // reallocating our buffer (since we realloc with the default alignment of 16).
+            // If that happens, we need to realign all of our buffer contents with a memmove and adjust the
+            // offset table appropriately.
+            
+            let first_offset = self.offs_table[0].0 as isize;
+            if align_diff > 0 || first_offset + align_diff < 0 {
+                // Not enough padding at the start of the buf; must move foreward to align
+                align_diff = ((align_diff as usize) & align_mask) as isize;
+            }
+
+            unsafe {
+                let start_ptr = self.dyn_data.offset(first_offset);
+                let dst = start_ptr.offset(align_diff);
+                debug_assert!(dst as usize >= self.dyn_data as usize);
+                debug_assert!(dst as usize <= (self.dyn_data as usize) + self.dyn_cap);
+                ptr::copy(start_ptr, dst, self.dyn_size);
+            }
+            for (ref mut offs, _) in &mut self.offs_table {
+                *offs = offs.wrapping_add(align_diff as usize);
+            }
+        }
     }
 
     /// Push a trait object onto the stack.
@@ -150,13 +206,18 @@ impl<T: ?Sized> DynStack<T> {
         let size = mem::size_of_val(&*item);
         let align = mem::align_of_val(&*item);
 
-        let curr_ptr = self.dyn_data as usize + self.dyn_size;
-        let aligned_ptr = align_up(curr_ptr, align);
-        let align_offs = aligned_ptr - curr_ptr;
+        let align_offs = loop {
+            let curr_ptr = self.dyn_data as usize + self.dyn_size;
+            let aligned_ptr = align_up(curr_ptr, align);
+            let align_offs = aligned_ptr - curr_ptr;
 
-        while self.dyn_size + align_offs + size > self.dyn_cap {
-            self.grow();
-        }
+            if self.dyn_size + align_offs + size > self.dyn_cap {
+                self.grow();
+            } else {
+                break align_offs;
+            }
+        };
+
         self.dyn_data
             .add(self.dyn_size)
             .add(align_offs)
@@ -166,6 +227,7 @@ impl<T: ?Sized> DynStack<T> {
         self.offs_table.push((self.dyn_size + align_offs, ptr_components[1]));
          
         self.dyn_size += align_offs + size;
+        self.max_align = align.max(self.max_align);
     }
 
     /// Remove the last trait object from the stack.
@@ -299,6 +361,7 @@ fn test_push_pop() {
     dyn_push!(stack, 1u32);
     dyn_push!(stack, 1u16);
     dyn_push!(stack, 1u64);
+    dyn_push!(stack, 1u128);
     dyn_push!(stack, bunch);
     dyn_push!(stack, { #[derive(Debug)] struct ZST; ZST });
     
@@ -316,7 +379,7 @@ fn test_push_pop() {
     }
     assert!( stack.remove_last() );
 
-    for _i in 0..4 {
+    for _i in 0..5 {
         if let Some(item) = stack.peek() {
             println!("{:?}", item);
             assert!(format!("{:?}", item) == "1");
@@ -375,4 +438,73 @@ fn test_drop() {
 
     let expected: HashSet<usize> = [1, 2, 3, 4, 5, 6].iter().cloned().collect();
     assert_eq!(drop_num(), &expected);
+}
+
+#[test]
+fn test_align() {
+    trait Aligned {
+        fn alignment(&self) -> usize;
+    }
+    impl Aligned for u32 {
+        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+    }
+    impl Aligned for u64 {
+        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+    }
+
+    #[repr(align(32))]
+    struct Aligned32 {
+        _dat: [u8; 32]
+    }
+    impl Aligned for Aligned32 {
+        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+    }
+
+    #[repr(align(64))]
+    struct Aligned64 {
+        _dat: [u8; 64]
+    }
+    impl Aligned for Aligned64 {
+        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+    }
+
+    fn new32() -> Aligned32 {
+        let mut dat = [0u8; 32];
+        for i in 0..32 {
+            dat[i] = i as u8;
+        }
+        Aligned32 { _dat: dat }
+    }
+    fn new64() -> Aligned64 {
+        let mut dat = [0u8; 64];
+        for i in 0..64 {
+            dat[i] = i as u8;
+        }
+        Aligned64 { _dat: dat }
+    }
+
+    let assert_aligned = |item: &Aligned| {
+        let thin_ptr = item as *const Aligned as *const () as usize;
+        println!("item expects alignment {}, got offset {}", item.alignment(),
+            thin_ptr & (item.alignment() - 1));
+        assert!(thin_ptr & (item.alignment() - 1) == 0);
+    };
+    
+    let mut stack = DynStack::<Aligned>::new();
+    
+    dyn_push!(stack, new32());
+    dyn_push!(stack, new64());
+    assert_aligned(stack.peek().unwrap());
+
+    for i in 0..256usize {
+        let randomized = (i.pow(7) % 13) % 4;
+        match randomized {
+            0 => dyn_push!(stack, 0xF0B0D0E0u32),
+            1 => dyn_push!(stack, 0x01020304F0B0D0E0u64),
+            2 => dyn_push!(stack, new32()),
+            3 => dyn_push!(stack, new64()),
+            _ => unreachable!()
+        }
+        assert_aligned(stack.peek().unwrap());
+    }
 }
