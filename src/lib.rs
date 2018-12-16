@@ -171,12 +171,14 @@ impl<T: ?Sized> DynStack<T> {
     /// Remove the last trait object from the stack.
     /// Returns true if any items were removed.
     pub fn remove_last(&mut self) -> bool {
-        if let Some((last_offs, _)) = self.offs_table.pop() {
-            self.dyn_size = last_offs;
-            true
+        if let Some(last_item) = self.peek_mut() {
+            unsafe { ptr::drop_in_place(last_item) };
         } else {
-            false
+            return false
         }
+        let (last_offs, _) = self.offs_table.pop().unwrap();
+        self.dyn_size = last_offs;
+        true
     }
 
     /// Retrieve a trait object reference at the provided index.
@@ -197,12 +199,12 @@ impl<T: ?Sized> DynStack<T> {
 
     /// Retrieve the trait object reference at the top of the stack.
     pub fn peek<'a>(&'a self) -> Option<&'a T> {
-        self.get(self.len() - 1)
+        self.get(self.len().wrapping_sub(1))
     }
 
     /// Retrieve the mutable trait object reference at the top of the stack.
     pub fn peek_mut<'a>(&'a mut self) -> Option<&'a mut T> {
-        let index = self.len() - 1;
+        let index = self.len().wrapping_sub(1);
         self.get_mut(index)
     }
 
@@ -268,11 +270,8 @@ impl<'a, T: 'a + ?Sized> IntoIterator for &'a mut DynStack<T> {
 
 impl<T: ?Sized> Drop for DynStack<T> {
     fn drop(&mut self) {
-        for item in self.iter_mut() {
-            unsafe { ptr::drop_in_place(item) };
-        }
-
-        unsafe { dealloc(self.dyn_data, Self::base_layout()) }
+        while self.remove_last() {}
+        unsafe { dealloc(self.dyn_data, self.layout()) }
     }
 }
 
