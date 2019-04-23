@@ -138,12 +138,23 @@ impl<T: ?Sized> DynStack<T> {
         );
         Self {
             offs_table: Vec::new(),
-            dyn_data: unsafe { alloc(Self::make_layout(16)) },
+            dyn_data: ptr::null_mut(),
             dyn_size: 0,
-            dyn_cap: 16,
+            dyn_cap: 0,
             max_align: 16,
             _spooky: PhantomData
         }
+    }
+
+    /// Called on first push to allocate heap data.
+    /// `DynStack::new` does not perform any allocation,
+    /// since it makes creating `DynStack` instances a lot faster.
+    fn allocate(&mut self, item_size: usize) {
+        // Always allocate a power of two size, fitting the first item.
+        // At least 16 bytes.
+        let alloc_size = item_size.next_power_of_two().max(16);
+        self.dyn_cap = alloc_size;
+        self.dyn_data = unsafe { alloc(Self::make_layout(alloc_size)) };
     }
 
     #[cfg(test)]
@@ -215,6 +226,11 @@ impl<T: ?Sized> DynStack<T> {
     pub unsafe fn push(&mut self, item: *mut T) {
         let size = mem::size_of_val(&*item);
         let align = mem::align_of_val(&*item);
+
+        // If we have not yet allocated any data, start by doing so.
+        if self.dyn_data.is_null() {
+            self.allocate(size);
+        }
 
         let align_offs = loop {
             let curr_ptr = self.dyn_data as usize + self.dyn_size;
