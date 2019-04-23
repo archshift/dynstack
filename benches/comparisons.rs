@@ -9,6 +9,18 @@ use dynstack::{DynStack, dyn_push};
 
 use std::fmt::Display;
 
+fn new_speed_naive(b: &mut Bencher) {
+    b.iter(|| {
+        Vec::<Box<dyn Display>>::new()
+    });
+}
+
+fn new_speed_dynstack(b: &mut Bencher) {
+    b.iter(|| {
+        DynStack::<dyn Display>::new()
+    });
+}
+
 fn push_speed_naive(b: &mut Bencher) {
     let mut vec = Vec::<Box<Display>>::new();
     b.iter(|| {
@@ -95,6 +107,8 @@ fn pseudorecursive2_dynstack(b: &mut Bencher) {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
+    c.bench_function("new_speed_naive", new_speed_naive);
+    c.bench_function("new_speed_dynstack", new_speed_dynstack);
     c.bench_function("push_speed_naive", push_speed_naive);
     c.bench_function("push_speed_dynstack", push_speed_dynstack);
     c.bench_function("push_and_run_naive", push_and_run_naive);
