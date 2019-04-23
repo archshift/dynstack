@@ -31,10 +31,19 @@ use std::ops::{Index, IndexMut};
 
 
 /// Decompose a fat pointer into its constituent [pointer, extdata] pair
-unsafe fn decomp_fat<T: ?Sized>(ptr: *const T) -> [usize; 2] {
+///
+/// # Panics
+///
+/// Will panic if given a non-trait object pointer
+pub fn decomp_fat<T: ?Sized>(ptr: *const T) -> [usize; 2] {
+    assert_eq!(
+        mem::size_of_val(&ptr),
+        mem::size_of::<[usize; 2]>(),
+        "Used on non trait object!"
+    );
     let ptr_ref: *const *const T = &ptr;
     let decomp_ref = ptr_ref as *const [usize; 2];
-    *decomp_ref
+    unsafe { *decomp_ref }
 }
 
 /// Recompose a fat pointer from its constituent [pointer, extdata] pair
@@ -507,4 +516,11 @@ fn test_align() {
         }
         assert_aligned(stack.peek().unwrap());
     }
+}
+
+#[test]
+#[should_panic]
+fn test_non_dyn() {
+    let mut stack: DynStack<u8> = DynStack::new();
+    dyn_push!(stack, 5u8);
 }
