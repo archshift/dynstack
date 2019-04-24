@@ -125,7 +125,17 @@ impl<T: ?Sized> DynStack<T> {
         Self::make_layout(self.dyn_cap)
     }
 
+    /// Creates a new, empty, [`DynStack`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `T` is not a trait object.
     pub fn new() -> Self {
+        assert_eq!(
+            mem::size_of::<*const T>(),
+            mem::size_of::<[usize; 2]>(),
+            "Used on non trait object!"
+        );
         Self {
             offs_table: Vec::new(),
             dyn_data: unsafe { alloc(Self::make_layout(16)) },
@@ -507,4 +517,10 @@ fn test_align() {
         }
         assert_aligned(stack.peek().unwrap());
     }
+}
+
+#[test]
+#[should_panic]
+fn test_non_dyn() {
+    let _stack: DynStack<u8> = DynStack::new();
 }
