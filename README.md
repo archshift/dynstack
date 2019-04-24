@@ -3,7 +3,7 @@
 ## A stack for trait objects that minimizes allocations
 
 **COMPATIBILITY NOTE:** `dynstack` relies on an underspecified fat pointer representation. Though
-it isn't expected to change in the foreseeable future, this crate expects Rust 1.32's representation.
+it isn't expected to change in the foreseeable future, this crate expects Rust 1.34's representation.
 
 ### Usage
 
