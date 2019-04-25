@@ -1,12 +1,5 @@
-#[macro_use]
-extern crate criterion;
-extern crate dynstack;
-
-use criterion::Bencher;
-use criterion::Criterion;
-
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 use dynstack::{DynStack, dyn_push};
-
 use std::fmt::Display;
 
 trait ATrait {}
