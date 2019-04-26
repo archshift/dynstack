@@ -9,6 +9,46 @@ use dynstack::{DynStack, dyn_push};
 
 use std::fmt::Display;
 
+trait ATrait {}
+
+struct Large([u8; 950]);
+
+impl Large {
+    pub fn new() -> Self {
+        Self([3; 950])
+    }
+}
+
+impl ATrait for Large {}
+
+fn new_speed_naive(b: &mut Bencher) {
+    b.iter(|| {
+        Vec::<Box<dyn Display>>::new()
+    });
+}
+
+fn new_speed_dynstack(b: &mut Bencher) {
+    b.iter(|| {
+        DynStack::<dyn Display>::new()
+    });
+}
+
+fn push_large_speed_naive(b: &mut Bencher) {
+    b.iter(|| {
+        let mut vec = Vec::<Box<dyn ATrait>>::new();
+        vec.push(Box::new(Large::new()));
+        vec
+    });
+}
+
+fn push_large_speed_dynstack(b: &mut Bencher) {
+    b.iter(|| {
+        let mut stack = DynStack::<dyn ATrait>::new();
+        dyn_push!(stack, Large::new());
+        stack
+    });
+}
+
 fn push_speed_naive(b: &mut Bencher) {
     let mut vec = Vec::<Box<Display>>::new();
     b.iter(|| {
@@ -95,6 +135,10 @@ fn pseudorecursive2_dynstack(b: &mut Bencher) {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
+    c.bench_function("new_speed_naive", new_speed_naive);
+    c.bench_function("new_speed_dynstack", new_speed_dynstack);
+    c.bench_function("push_large_speed_naive", push_large_speed_naive);
+    c.bench_function("push_large_speed_dynstack", push_large_speed_dynstack);
     c.bench_function("push_speed_naive", push_speed_naive);
     c.bench_function("push_speed_dynstack", push_speed_dynstack);
     c.bench_function("push_and_run_naive", push_and_run_naive);
