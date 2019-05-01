@@ -1,6 +1,6 @@
 [package]
 name = "dynstack"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Gui Andrade <gh@archshift.com>"]
 description = "A stack for trait objects that minimizes allocations"
 repository = "https://github.com/archshift/dynstack"
