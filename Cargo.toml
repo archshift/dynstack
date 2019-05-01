@@ -6,6 +6,7 @@ description = "A stack for trait objects that minimizes allocations"
 repository = "https://github.com/archshift/dynstack"
 license = "MIT"
 readme = "README.md"
+edition = "2018"
 
 [dev-dependencies]
 criterion = "0.1.2"

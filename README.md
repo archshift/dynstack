@@ -11,7 +11,7 @@ it isn't expected to change in the foreseeable future, this crate expects Rust 1
 require removal from its center.
 
 ```rust
-let mut stack = DynStack::<Debug>::new();
+let mut stack = DynStack::<dyn Debug>::new();
 dyn_push!(stack, "hello, world!");
 dyn_push!(stack, 0usize);
 dyn_push!(stack, [1, 2, 3, 4, 5, 6]);

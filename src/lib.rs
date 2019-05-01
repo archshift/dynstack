@@ -5,7 +5,7 @@
 //! ```
 //! # use dynstack::{DynStack, dyn_push};
 //! # use std::fmt::Debug;
-//! let mut stack = DynStack::<Debug>::new();
+//! let mut stack = DynStack::<dyn Debug>::new();
 //! dyn_push!(stack, "hello, world!");
 //! dyn_push!(stack, 0usize);
 //! dyn_push!(stack, [1, 2, 3, 4, 5, 6]);
@@ -20,15 +20,15 @@
 //! //  [1, 2, 3, 4, 5, 6]
 //! ```
 
+#![deny(rust_2018_idioms)]
 
-
-use std::alloc::{alloc, dealloc, Layout};
-use std::mem;
-use std::marker::PhantomData;
-use std::ptr;
-use std::ops::{Index, IndexMut};
-
-
+use std::{
+    alloc::{alloc, dealloc, Layout},
+    marker::PhantomData,
+    mem,
+    ops::{Index, IndexMut},
+    ptr,
+};
 
 /// Decompose a fat pointer into its constituent [pointer, extdata] pair
 unsafe fn decomp_fat<T: ?Sized>(ptr: *const T) -> [usize; 2] {
@@ -74,7 +74,7 @@ fn test_align_up() {
 
 
 /// Iterator over trait object references
-pub struct DynStackIter<'a, T: 'a + ?Sized> {
+pub struct DynStackIter<'a, T: ?Sized> {
     stack: &'a DynStack<T>,
     index: usize,
 }
@@ -89,7 +89,7 @@ impl<'a, T: 'a + ?Sized> Iterator for DynStackIter<'a, T> {
 
 
 /// Iterator over mutable trait object references
-pub struct DynStackIterMut<'a, T: 'a + ?Sized> {
+pub struct DynStackIterMut<'a, T: ?Sized> {
     stack: *mut DynStack<T>,
     index: usize,
     _spooky: PhantomData<&'a mut DynStack<T>>
@@ -381,7 +381,7 @@ macro_rules! dyn_push {
 #[test]
 fn test_push_pop() {
     use std::fmt::Debug;
-    let mut stack = DynStack::<Debug>::new();
+    let mut stack = DynStack::<dyn Debug>::new();
     let bunch = vec![1u32, 2, 3, 4, 5, 6, 7, 8, 9];
     dyn_push!(stack, 1u8);
     dyn_push!(stack, 1u32);
@@ -421,7 +421,7 @@ fn test_push_pop() {
 
 #[test]
 fn test_fn() {
-    let mut stack = DynStack::<Fn() -> usize>::new();
+    let mut stack = DynStack::<dyn Fn() -> usize>::new();
     for i in 0..100 {
         dyn_push!(stack, move || i);
     }
@@ -452,7 +452,7 @@ fn test_drop() {
     }
 
     {
-        let mut stack = DynStack::<Any>::new();
+        let mut stack = DynStack::<dyn Any>::new();
         dyn_push!(stack, Droppable{counter: 1});
         dyn_push!(stack, Droppable{counter: 2});
         dyn_push!(stack, Droppable{counter: 3});
@@ -509,14 +509,14 @@ fn test_align() {
         Aligned64 { _dat: dat }
     }
 
-    let assert_aligned = |item: &Aligned| {
-        let thin_ptr = item as *const Aligned as *const () as usize;
+    let assert_aligned = |item: &dyn Aligned| {
+        let thin_ptr = item as *const dyn Aligned as *const () as usize;
         println!("item expects alignment {}, got offset {}", item.alignment(),
             thin_ptr & (item.alignment() - 1));
         assert!(thin_ptr & (item.alignment() - 1) == 0);
     };
     
-    let mut stack = DynStack::<Aligned>::new();
+    let mut stack = DynStack::<dyn Aligned>::new();
     
     dyn_push!(stack, new32());
     dyn_push!(stack, new64());

@@ -1,12 +1,5 @@
-#[macro_use]
-extern crate criterion;
-extern crate dynstack;
-
-use criterion::Bencher;
-use criterion::Criterion;
-
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 use dynstack::{DynStack, dyn_push};
-
 use std::fmt::Display;
 
 trait ATrait {}
@@ -50,7 +43,7 @@ fn push_large_speed_dynstack(b: &mut Bencher) {
 }
 
 fn push_speed_naive(b: &mut Bencher) {
-    let mut vec = Vec::<Box<Display>>::new();
+    let mut vec = Vec::<Box<dyn Display>>::new();
     b.iter(|| {
         vec.push(Box::new(0xF00BAAusize));
         vec.push(Box::new(0xABBAu16));
@@ -60,7 +53,7 @@ fn push_speed_naive(b: &mut Bencher) {
 }
 
 fn push_speed_dynstack(b: &mut Bencher) {
-    let mut stack = DynStack::<Display>::new();
+    let mut stack = DynStack::<dyn Display>::new();
     b.iter(|| {
         dyn_push!(stack, 0xF00BAAusize);
         dyn_push!(stack, 0xABBAu16);
@@ -71,8 +64,8 @@ fn push_speed_dynstack(b: &mut Bencher) {
 
 fn push_and_run_naive(b: &mut Bencher) {
     b.iter(|| {
-        let mut stack = Vec::<Box<Fn() -> usize>>::new();
-        fn pseudorecursive(stack: &mut Vec<Box<Fn() -> usize>>, n: usize) {
+        let mut stack = Vec::<Box<dyn Fn() -> usize>>::new();
+        fn pseudorecursive(stack: &mut Vec<Box<dyn Fn() -> usize>>, n: usize) {
             stack.push(Box::new(move || n - 1));
         }
 
@@ -88,8 +81,8 @@ fn push_and_run_naive(b: &mut Bencher) {
 
 fn push_and_run_dynstack(b: &mut Bencher) {
     b.iter(|| {
-        let mut stack = DynStack::<Fn() -> usize>::new();
-        fn pseudorecursive(stack: &mut DynStack<Fn() -> usize>, n: usize) {
+        let mut stack = DynStack::<dyn Fn() -> usize>::new();
+        fn pseudorecursive(stack: &mut DynStack<dyn Fn() -> usize>, n: usize) {
             dyn_push!(stack, move || n - 1);
         }
 
@@ -105,8 +98,8 @@ fn push_and_run_dynstack(b: &mut Bencher) {
 
 fn pseudorecursive2_naive(b: &mut Bencher) {
     b.iter(|| {
-        let mut state: Box<Fn() -> usize> = Box::new(|| 0);
-        fn pseudorecursive(state: &mut Box<Fn() -> usize>, n: usize) {
+        let mut state: Box<dyn Fn() -> usize> = Box::new(|| 0);
+        fn pseudorecursive(state: &mut Box<dyn Fn() -> usize>, n: usize) {
             *state = Box::new(move || n - 1);
         }
 
@@ -120,8 +113,8 @@ fn pseudorecursive2_naive(b: &mut Bencher) {
 
 fn pseudorecursive2_dynstack(b: &mut Bencher) {
     b.iter(|| {
-        let mut stack = DynStack::<Fn() -> usize>::new();
-        fn pseudorecursive(stack: &mut DynStack<Fn() -> usize>, n: usize) {
+        let mut stack = DynStack::<dyn Fn() -> usize>::new();
+        fn pseudorecursive(stack: &mut DynStack<dyn Fn() -> usize>, n: usize) {
             dyn_push!(stack, move || n - 1);
         }
 
