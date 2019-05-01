@@ -20,7 +20,7 @@
 //! //  [1, 2, 3, 4, 5, 6]
 //! ```
 
-
+#![deny(rust_2018_idioms)]
 
 use std::alloc::{alloc, dealloc, Layout};
 use std::mem;
