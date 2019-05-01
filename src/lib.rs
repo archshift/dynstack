@@ -22,13 +22,13 @@
 
 #![deny(rust_2018_idioms)]
 
-use std::alloc::{alloc, dealloc, Layout};
-use std::mem;
-use std::marker::PhantomData;
-use std::ptr;
-use std::ops::{Index, IndexMut};
-
-
+use std::{
+    alloc::{alloc, dealloc, Layout},
+    marker::PhantomData,
+    mem,
+    ops::{Index, IndexMut},
+    ptr,
+};
 
 /// Decompose a fat pointer into its constituent [pointer, extdata] pair
 unsafe fn decomp_fat<T: ?Sized>(ptr: *const T) -> [usize; 2] {
