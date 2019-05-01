@@ -1,4 +1,4 @@
-//! 
+//!
 //! `dynstack` can mostly replace anywhere you'd use a stack, or a vector that doesn't
 //! require removal from its center.
 //!
@@ -9,7 +9,7 @@
 //! dyn_push!(stack, "hello, world!");
 //! dyn_push!(stack, 0usize);
 //! dyn_push!(stack, [1, 2, 3, 4, 5, 6]);
-//! 
+//!
 //! for item in stack.iter() {
 //!     println!("{:?}", item);
 //! }
@@ -177,7 +177,7 @@ impl<T: ?Sized> DynStack<T> {
         self.dyn_cap = new_cap;
         self.dyn_data = unsafe { realloc(self.dyn_data, self.layout(), self.dyn_cap) };
     }
-    
+
     /// Double the stack's capacity
     fn grow(&mut self) {
         let align_mask = self.max_align - 1;
@@ -185,7 +185,7 @@ impl<T: ?Sized> DynStack<T> {
 
         let new_cap = self.dyn_cap * 2;
         self.reallocate(new_cap);
-        
+
         let new_align = self.dyn_data as usize & align_mask;
         let mut align_diff = (new_align as isize) - (prev_align as isize);
 
@@ -194,7 +194,7 @@ impl<T: ?Sized> DynStack<T> {
             // reallocating our buffer (since we realloc with the default alignment of 16).
             // If that happens, we need to realign all of our buffer contents with a memmove and adjust the
             // offset table appropriately.
-            
+
             let first_offset = self.offs_table[0].0 as isize;
             if align_diff > 0 || first_offset + align_diff < 0 {
                 // Not enough padding at the start of the buf; must move foreward to align
@@ -218,7 +218,7 @@ impl<T: ?Sized> DynStack<T> {
     ///
     /// This method is unsafe because in lieu of moving a trait object onto `push`'s stack
     /// (not possible in rust as of 1.30.0) we copy it from the provided mutable pointer.
-    /// 
+    ///
     /// The user of this method must therefore either ensure that `item` has no `Drop` impl,
     /// or explicitly call `std::mem::forget` on `item` after pushing.
     ///
@@ -248,10 +248,10 @@ impl<T: ?Sized> DynStack<T> {
             .add(self.dyn_size)
             .add(align_offs)
             .copy_from_nonoverlapping(item as *const u8, size);
-        
+
         let ptr_components = decomp_fat(item);
         self.offs_table.push((self.dyn_size + align_offs, ptr_components[1]));
-         
+
         self.dyn_size += align_offs + size;
         self.max_align = align.max(self.max_align);
     }
@@ -390,7 +390,7 @@ fn test_push_pop() {
     dyn_push!(stack, 1u128);
     dyn_push!(stack, bunch);
     dyn_push!(stack, { #[derive(Debug)] struct ZST; ZST });
-    
+
     if let Some(item) = stack.peek() {
         println!("{:?}", item);
         assert!(format!("{:?}", item) == "ZST");
@@ -515,9 +515,9 @@ fn test_align() {
             thin_ptr & (item.alignment() - 1));
         assert!(thin_ptr & (item.alignment() - 1) == 0);
     };
-    
+
     let mut stack = DynStack::<dyn Aligned>::new();
-    
+
     dyn_push!(stack, new32());
     dyn_push!(stack, new64());
     assert_aligned(stack.peek().unwrap());
