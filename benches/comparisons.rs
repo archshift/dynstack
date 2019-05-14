@@ -127,6 +127,38 @@ fn pseudorecursive2_dynstack(b: &mut Bencher) {
     });
 }
 
+trait AsUsize {
+    fn make(&self) -> usize;
+}
+
+impl AsUsize for usize {
+    fn make(&self) -> usize { *self }
+}
+
+fn access_naive(b: &mut Bencher) {
+    let mut stack = Vec::<Box<dyn AsUsize>>::new();
+    for _ in 0..1000 {
+        stack.push(Box::new(0xF00BAAusize));
+    }
+    b.iter(|| {
+        for i in &stack {
+            criterion::black_box(i.make());
+        }
+    });
+}
+
+fn access_dynstack(b: &mut Bencher) {
+    let mut stack = DynStack::<dyn AsUsize>::new();
+    for _ in 0..1000 {
+        dyn_push!(stack, 0xF00BAAusize);
+    }
+    b.iter(|| {
+        for i in &stack {
+            criterion::black_box(i.make());
+        }
+    });
+}
+
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("new_speed_naive", new_speed_naive);
     c.bench_function("new_speed_dynstack", new_speed_dynstack);
@@ -138,6 +170,8 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("push_and_run_dynstack", push_and_run_dynstack);
     c.bench_function("pseudorecursive2_naive", pseudorecursive2_naive);
     c.bench_function("pseudorecursive2_dynstack", pseudorecursive2_dynstack);
+    c.bench_function("access_naive", access_naive);
+    c.bench_function("access_dynstack", access_dynstack);
 }
 
 criterion_group!(benches, criterion_benchmark);
