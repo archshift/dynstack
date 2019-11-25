@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [Unreleased]
+
+## [0.4.0] - 2019-11-26
 ### Changed
 - Don't allocate memory in `DynStack::new`. Postpone allocation until the first push.
 - Upgrade the crate to Rust 2018 edition. Makes the minimum required compiler version 1.31.
