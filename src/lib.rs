@@ -139,6 +139,38 @@ impl<T: ?Sized> DynStack<T> {
             mem::size_of::<[usize; 2]>(),
             "Used on non trait object!"
         );
+        // SAFETY: We verify above that T is indeed a trait object.
+        unsafe { Self::new_unchecked() }
+    }
+
+    /// Creates a new, empty, [`DynStack`]. This method is a `const fn`, so instances can be
+    /// statically initialized. This comes at the cost of no runtime sanity check that the stack
+    /// is properly used with trait objects, which is why it is unsafe to call.
+    ///
+    /// # Safety
+    ///
+    /// Must only be called with the generic, `T`, being a trait object.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use core::fmt::Display;
+    /// # use dynstack::DynStack;
+    ///
+    /// // SAFETY: Storing trait objects, as required
+    /// static CORRECT: DynStack<dyn Display + Sync> = unsafe { DynStack::new_unchecked() };
+    ///
+    /// // DONT do the following, Sting is not a trait object. This compiles
+    /// // but has undefined behavior.
+    /// static WRONG: DynStack<String> = unsafe { DynStack::new_unchecked() };
+    /// ```
+    ///
+    /// Storing it directly in a static, like above, does of course not make much sense, because
+    /// you can't modify it. But if you put it inside a synchronazation primitive that allows
+    /// static initialization, such as `parking_lot::RwLock`, it can be used as a globally
+    /// accessible, modifiable stack.
+    #[inline]
+    pub const unsafe fn new_unchecked() -> Self {
         Self {
             offs_table: Vec::new(),
             dyn_data: ptr::null_mut(),
