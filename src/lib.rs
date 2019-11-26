@@ -117,6 +117,9 @@ pub struct DynStack<T: ?Sized> {
     _spooky: PhantomData<T>,
 }
 
+unsafe impl<T: ?Sized + Send> Send for DynStack<T> {}
+unsafe impl<T: ?Sized + Sync> Sync for DynStack<T> {}
+
 impl<T: ?Sized> DynStack<T> {
     fn make_layout(cap: usize) -> Layout {
         unsafe { Layout::from_size_align_unchecked(cap, 16) }
@@ -539,4 +542,85 @@ fn test_align() {
 #[should_panic]
 fn test_non_dyn() {
     let _stack: DynStack<u8> = DynStack::new();
+}
+
+#[test]
+fn test_send() {
+    use std::{fmt::Display, sync::mpsc, thread};
+
+    let mut stack: DynStack<dyn Display + Send> = DynStack::new();
+    dyn_push!(stack, String::from("1"));
+
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        dyn_push!(stack, String::from("2"));
+        sender.send(stack).unwrap();
+    });
+    let stack = receiver.recv().unwrap();
+    assert_eq!(stack.len(), 2);
+    assert_eq!(stack[0].to_string(), "1");
+    assert_eq!(stack[1].to_string(), "2");
+}
+
+#[test]
+fn test_sync() {
+    use std::sync::{Arc, atomic::{AtomicI32, AtomicU64, Ordering}};
+    use std::thread;
+
+    trait AtomicInt: Send + Sync {
+        fn increment(&self);
+
+        fn get(&self) -> u64;
+    }
+
+    impl AtomicInt for AtomicI32 {
+        fn increment(&self) {
+            self.fetch_add(1, Ordering::Relaxed);
+        }
+
+        fn get(&self) -> u64 {
+            self.load(Ordering::Relaxed) as u64
+        }
+    }
+
+    impl AtomicInt for AtomicU64 {
+        fn increment(&self) {
+            self.fetch_add(1, Ordering::Relaxed);
+        }
+
+        fn get(&self) -> u64 {
+            self.load(Ordering::Relaxed)
+        }
+    }
+
+    // Create a stack with different type of atomic integers in it.
+    // We use quite a lot of integers, so the thread execution later
+    // is likely to interleave.
+    let mut stack: DynStack<dyn AtomicInt> = DynStack::new();
+    for i in 0..10_000 {
+        if i % 2 == 0 {
+            dyn_push!(stack, AtomicI32::new(0));
+        } else {
+            dyn_push!(stack, AtomicU64::new(0));
+        }
+    }
+
+    let stack = Arc::new(stack);
+    // Loop over the stack and increment every value once in each thread
+    let mut threads = Vec::new();
+    for _ in 0..100 {
+        let stack = stack.clone();
+        threads.push(thread::spawn(move || {
+            for int in stack.iter() {
+                int.increment();
+            }
+        }));
+    }
+    for thread in threads {
+        thread.join().expect("Joining threads");
+    }
+
+    for int in stack.iter() {
+        assert_eq!(int.get(), 100);
+    }
 }
