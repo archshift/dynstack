@@ -20,10 +20,16 @@
 //! //  [1, 2, 3, 4, 5, 6]
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(rust_2018_idioms)]
 
-use std::{
+extern crate alloc;
+
+use alloc::{
     alloc::{alloc, dealloc, Layout},
+    vec::Vec,
+};
+use core::{
     marker::PhantomData,
     mem,
     ops::{Index, IndexMut},
@@ -208,7 +214,7 @@ impl<T: ?Sized> DynStack<T> {
 
     #[cfg(not(test))]
     fn reallocate(&mut self, new_cap: usize) {
-        use std::alloc::realloc;
+        use alloc::alloc::realloc;
         self.dyn_cap = new_cap;
         self.dyn_data = unsafe { realloc(self.dyn_data, self.layout(), self.dyn_cap) };
     }
@@ -407,7 +413,7 @@ macro_rules! dyn_push {
         let mut t = $item;
 
         unsafe { $stack.push(&mut t) };
-        ::std::mem::forget(t);
+        core::mem::forget(t);
     }}
 }
 
@@ -470,7 +476,7 @@ fn test_fn() {
 
 #[test]
 fn test_drop() {
-    use std::any::Any;
+    use core::any::Any;
     use std::collections::HashSet;
 
     static mut DROP_NUM: Option<HashSet<usize>> = None;
@@ -507,10 +513,10 @@ fn test_align() {
         fn alignment(&self) -> usize;
     }
     impl Aligned for u32 {
-        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
     }
     impl Aligned for u64 {
-        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
     }
 
     #[repr(align(32))]
@@ -518,7 +524,7 @@ fn test_align() {
         _dat: [u8; 32]
     }
     impl Aligned for Aligned32 {
-        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
     }
 
     #[repr(align(64))]
@@ -526,7 +532,7 @@ fn test_align() {
         _dat: [u8; 64]
     }
     impl Aligned for Aligned64 {
-        fn alignment(&self) -> usize { ::std::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
     }
 
     fn new32() -> Aligned32 {

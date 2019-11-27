@@ -14,3 +14,10 @@ criterion = "0.1.2"
 [[bench]]
 name = "comparisons"
 harness = false
+
+[features]
+default = ["std"]
+
+# Enables std. Currently used to make tests work. But the library itself
+# works without the standard library.
+std = []
