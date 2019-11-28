@@ -36,28 +36,7 @@ use core::{
     ptr,
 };
 
-/// Decompose a fat pointer into its constituent [pointer, extdata] pair
-unsafe fn decomp_fat<T: ?Sized>(ptr: *const T) -> [usize; 2] {
-    let ptr_ref: *const *const T = &ptr;
-    let decomp_ref = ptr_ref as *const [usize; 2];
-    *decomp_ref
-}
-
-/// Recompose a fat pointer from its constituent [pointer, extdata] pair
-unsafe fn recomp_fat<T: ?Sized>(components: [usize; 2]) -> *const T {
-    let component_ref: *const [usize; 2] = &components;
-    let ptr_ref = component_ref as *const *const T;
-    *ptr_ref
-}
-
-/// Recompose a mutable fat pointer from its constituent [pointer, extdata] pair
-unsafe fn recomp_fat_mut<T: ?Sized>(components: [usize; 2]) -> *mut T {
-    let component_ref: *const [usize; 2] = &components;
-    let ptr_ref = component_ref as *const *mut T;
-    *ptr_ref
-}
-
-
+mod fatptr;
 
 /// Rounds up an integer to the nearest `align`
 fn align_up(num: usize, align: usize) -> usize {
@@ -290,7 +269,7 @@ impl<T: ?Sized> DynStack<T> {
             .add(align_offs)
             .copy_from_nonoverlapping(item as *const u8, size);
 
-        let ptr_components = decomp_fat(item);
+        let ptr_components = fatptr::decomp(item);
         self.offs_table.push((self.dyn_size + align_offs, ptr_components[1]));
 
         self.dyn_size += align_offs + size;
@@ -314,7 +293,7 @@ impl<T: ?Sized> DynStack<T> {
     pub fn get<'a>(&'a self, index: usize) -> Option<&'a T> {
         let item = self.offs_table.get(index)?;
         let components = [self.dyn_data as usize + item.0, item.1];
-        let out = unsafe { &*recomp_fat(components) };
+        let out = unsafe { &*fatptr::recomp(components) };
         Some(out)
     }
 
@@ -322,7 +301,7 @@ impl<T: ?Sized> DynStack<T> {
     pub fn get_mut<'a>(&'a mut self, index: usize) -> Option<&'a mut T> {
         let item = self.offs_table.get(index)?;
         let components = [self.dyn_data as usize + item.0, item.1];
-        let out = unsafe { &mut *recomp_fat_mut(components) };
+        let out = unsafe { &mut *fatptr::recomp(components) };
         Some(out)
     }
 
