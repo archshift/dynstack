@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
-use dynstack::{DynStack, dyn_push};
+use dynstack::{dyn_push, DynStack};
 use std::fmt::Display;
 
 trait ATrait {}
@@ -15,15 +15,11 @@ impl Large {
 impl ATrait for Large {}
 
 fn new_speed_naive(b: &mut Bencher) {
-    b.iter(|| {
-        Vec::<Box<dyn Display>>::new()
-    });
+    b.iter(Vec::<Box<dyn Display>>::new);
 }
 
 fn new_speed_dynstack(b: &mut Bencher) {
-    b.iter(|| {
-        DynStack::<dyn Display>::new()
-    });
+    b.iter(DynStack::<dyn Display>::new);
 }
 
 fn push_large_speed_naive(b: &mut Bencher) {
@@ -132,7 +128,9 @@ trait AsUsize {
 }
 
 impl AsUsize for usize {
-    fn make(&self) -> usize { *self }
+    fn make(&self) -> usize {
+        *self
+    }
 }
 
 fn access_naive(b: &mut Bencher) {

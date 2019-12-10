@@ -56,8 +56,6 @@ fn test_align_up() {
     }
 }
 
-
-
 /// Iterator over trait object references
 pub struct DynStackIter<'a, T: ?Sized> {
     stack: &'a DynStack<T>,
@@ -67,31 +65,31 @@ pub struct DynStackIter<'a, T: ?Sized> {
 impl<'a, T: 'a + ?Sized> Iterator for DynStackIter<'a, T> {
     type Item = &'a T;
     fn next(&mut self) -> Option<&'a T> {
-        self.stack.get(self.index)
-            .map(|out| {self.index += 1; out})
+        self.stack.get(self.index).map(|out| {
+            self.index += 1;
+            out
+        })
     }
 }
-
 
 /// Iterator over mutable trait object references
 pub struct DynStackIterMut<'a, T: ?Sized> {
     stack: *mut DynStack<T>,
     index: usize,
-    _spooky: PhantomData<&'a mut DynStack<T>>
+    _spooky: PhantomData<&'a mut DynStack<T>>,
 }
 
 impl<'a, T: 'a + ?Sized> Iterator for DynStackIterMut<'a, T> {
     type Item = &'a mut T;
     fn next(&mut self) -> Option<&'a mut T> {
         unsafe {
-            (*self.stack).get_mut(self.index)
-                .map(|out| {self.index += 1; out})
+            (*self.stack).get_mut(self.index).map(|out| {
+                self.index += 1;
+                out
+            })
         }
     }
 }
-
-
-
 
 pub struct DynStack<T: ?Sized> {
     offs_table: Vec<(usize, usize)>,
@@ -162,7 +160,7 @@ impl<T: ?Sized> DynStack<T> {
             dyn_size: 0,
             dyn_cap: 0,
             max_align: 16,
-            _spooky: PhantomData
+            _spooky: PhantomData,
         }
     }
 
@@ -270,7 +268,8 @@ impl<T: ?Sized> DynStack<T> {
             .copy_from_nonoverlapping(item as *const u8, size);
 
         let ptr_components = fatptr::decomp(item);
-        self.offs_table.push((self.dyn_size + align_offs, ptr_components[1]));
+        self.offs_table
+            .push((self.dyn_size + align_offs, ptr_components[1]));
 
         self.dyn_size += align_offs + size;
         self.max_align = align.max(self.max_align);
@@ -282,7 +281,7 @@ impl<T: ?Sized> DynStack<T> {
         if let Some(last_item) = self.peek_mut() {
             unsafe { ptr::drop_in_place(last_item) };
         } else {
-            return false
+            return false;
         }
         let (last_offs, _) = self.offs_table.pop().unwrap();
         self.dyn_size = last_offs;
@@ -327,7 +326,7 @@ impl<'a, T: 'a + ?Sized> DynStack<T> {
     pub fn iter(&'a self) -> DynStackIter<'a, T> {
         DynStackIter {
             stack: self,
-            index: 0
+            index: 0,
         }
     }
 
@@ -336,11 +335,10 @@ impl<'a, T: 'a + ?Sized> DynStack<T> {
         DynStackIterMut {
             stack: self,
             index: 0,
-            _spooky: PhantomData
+            _spooky: PhantomData,
         }
     }
 }
-
 
 impl<T: ?Sized> Index<usize> for DynStack<T> {
     type Output = T;
@@ -355,7 +353,6 @@ impl<T: ?Sized> IndexMut<usize> for DynStack<T> {
         self.get_mut(idx).unwrap()
     }
 }
-
 
 impl<'a, T: 'a + ?Sized> IntoIterator for &'a DynStack<T> {
     type Item = &'a T;
@@ -375,15 +372,12 @@ impl<'a, T: 'a + ?Sized> IntoIterator for &'a mut DynStack<T> {
     }
 }
 
-
 impl<T: ?Sized> Drop for DynStack<T> {
     fn drop(&mut self) {
         while self.remove_last() {}
         unsafe { dealloc(self.dyn_data, self.layout()) }
     }
 }
-
-
 
 /// Push an item onto the back of the specified stack
 #[macro_export]
@@ -396,8 +390,6 @@ macro_rules! dyn_push {
     }}
 }
 
-
-
 #[test]
 fn test_push_pop() {
     use std::fmt::Debug;
@@ -409,7 +401,11 @@ fn test_push_pop() {
     dyn_push!(stack, 1u64);
     dyn_push!(stack, 1u128);
     dyn_push!(stack, bunch);
-    dyn_push!(stack, { #[derive(Debug)] struct ZST; ZST });
+    dyn_push!(stack, {
+        #[derive(Debug)]
+        struct ZST;
+        ZST
+    });
 
     if let Some(item) = stack.peek() {
         println!("{:?}", item);
@@ -417,13 +413,13 @@ fn test_push_pop() {
     } else {
         unreachable!();
     }
-    assert!( stack.remove_last() );
+    assert!(stack.remove_last());
 
     if let Some(item) = stack.peek() {
         println!("{:?}", item);
         assert!(format!("{:?}", item) == "[1, 2, 3, 4, 5, 6, 7, 8, 9]");
     }
-    assert!( stack.remove_last() );
+    assert!(stack.remove_last());
 
     for _i in 0..5 {
         if let Some(item) = stack.peek() {
@@ -432,11 +428,11 @@ fn test_push_pop() {
         } else {
             unreachable!();
         }
-        assert!( stack.remove_last() );
+        assert!(stack.remove_last());
     }
 
-    assert!( stack.len() == 0 );
-    assert!( stack.dyn_size == 0 );
+    assert!(stack.len() == 0);
+    assert!(stack.dyn_size == 0);
 }
 
 #[test]
@@ -460,11 +456,16 @@ fn test_drop() {
 
     static mut DROP_NUM: Option<HashSet<usize>> = None;
     unsafe { DROP_NUM = Some(HashSet::new()) };
-    fn drop_num() -> &'static HashSet<usize> { unsafe { DROP_NUM.as_ref().unwrap() } }
-    fn drop_num_mut() -> &'static mut HashSet<usize> { unsafe { DROP_NUM.as_mut().unwrap() } }
+    fn drop_num() -> &'static HashSet<usize> {
+        unsafe { DROP_NUM.as_ref().unwrap() }
+    }
+    fn drop_num_mut() -> &'static mut HashSet<usize> {
+        unsafe { DROP_NUM.as_mut().unwrap() }
+    }
 
-
-    struct Droppable {counter: usize};
+    struct Droppable {
+        counter: usize,
+    };
     impl Drop for Droppable {
         fn drop(&mut self) {
             drop_num_mut().insert(self.counter);
@@ -473,12 +474,12 @@ fn test_drop() {
 
     {
         let mut stack = DynStack::<dyn Any>::new();
-        dyn_push!(stack, Droppable{counter: 1});
-        dyn_push!(stack, Droppable{counter: 2});
-        dyn_push!(stack, Droppable{counter: 3});
-        dyn_push!(stack, Droppable{counter: 4});
-        dyn_push!(stack, Droppable{counter: 5});
-        dyn_push!(stack, Droppable{counter: 6});
+        dyn_push!(stack, Droppable { counter: 1 });
+        dyn_push!(stack, Droppable { counter: 2 });
+        dyn_push!(stack, Droppable { counter: 3 });
+        dyn_push!(stack, Droppable { counter: 4 });
+        dyn_push!(stack, Droppable { counter: 5 });
+        dyn_push!(stack, Droppable { counter: 6 });
         assert!(drop_num().is_empty());
     }
 
@@ -492,26 +493,34 @@ fn test_align() {
         fn alignment(&self) -> usize;
     }
     impl Aligned for u32 {
-        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize {
+            core::mem::align_of::<Self>()
+        }
     }
     impl Aligned for u64 {
-        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize {
+            core::mem::align_of::<Self>()
+        }
     }
 
     #[repr(align(32))]
     struct Aligned32 {
-        _dat: [u8; 32]
+        _dat: [u8; 32],
     }
     impl Aligned for Aligned32 {
-        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize {
+            core::mem::align_of::<Self>()
+        }
     }
 
     #[repr(align(64))]
     struct Aligned64 {
-        _dat: [u8; 64]
+        _dat: [u8; 64],
     }
     impl Aligned for Aligned64 {
-        fn alignment(&self) -> usize { core::mem::align_of::<Self>() }
+        fn alignment(&self) -> usize {
+            core::mem::align_of::<Self>()
+        }
     }
 
     fn new32() -> Aligned32 {
@@ -531,8 +540,11 @@ fn test_align() {
 
     let assert_aligned = |item: &dyn Aligned| {
         let thin_ptr = item as *const dyn Aligned as *const () as usize;
-        println!("item expects alignment {}, got offset {}", item.alignment(),
-            thin_ptr & (item.alignment() - 1));
+        println!(
+            "item expects alignment {}, got offset {}",
+            item.alignment(),
+            thin_ptr & (item.alignment() - 1)
+        );
         assert!(thin_ptr & (item.alignment() - 1) == 0);
     };
 
@@ -549,7 +561,7 @@ fn test_align() {
             1 => dyn_push!(stack, 0x01020304F0B0D0E0u64),
             2 => dyn_push!(stack, new32()),
             3 => dyn_push!(stack, new64()),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
         assert_aligned(stack.peek().unwrap());
     }
@@ -581,7 +593,10 @@ fn test_send() {
 
 #[test]
 fn test_sync() {
-    use std::sync::{Arc, atomic::{AtomicI32, AtomicU64, Ordering}};
+    use std::sync::{
+        atomic::{AtomicI32, AtomicU64, Ordering},
+        Arc,
+    };
     use std::thread;
 
     trait AtomicInt: Send + Sync {
