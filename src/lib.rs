@@ -64,13 +64,21 @@ pub struct DynStackIter<'a, T: ?Sized> {
 
 impl<'a, T: 'a + ?Sized> Iterator for DynStackIter<'a, T> {
     type Item = &'a T;
+
     fn next(&mut self) -> Option<&'a T> {
         self.stack.get(self.index).map(|out| {
             self.index += 1;
             out
         })
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self.stack.len() - self.index;
+        (size, Some(size))
+    }
 }
+
+impl<'a, T: 'a + ?Sized> ExactSizeIterator for DynStackIter<'a, T> {}
 
 /// Iterator over mutable trait object references
 pub struct DynStackIterMut<'a, T: ?Sized> {
@@ -81,6 +89,7 @@ pub struct DynStackIterMut<'a, T: ?Sized> {
 
 impl<'a, T: 'a + ?Sized> Iterator for DynStackIterMut<'a, T> {
     type Item = &'a mut T;
+
     fn next(&mut self) -> Option<&'a mut T> {
         unsafe {
             (*self.stack).get_mut(self.index).map(|out| {
@@ -89,7 +98,14 @@ impl<'a, T: 'a + ?Sized> Iterator for DynStackIterMut<'a, T> {
             })
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = unsafe { &*self.stack }.len() - self.index;
+        (size, Some(size))
+    }
 }
+
+impl<'a, T: 'a + ?Sized> ExactSizeIterator for DynStackIterMut<'a, T> {}
 
 pub struct DynStack<T: ?Sized> {
     offs_table: Vec<(usize, usize)>,
@@ -654,5 +670,53 @@ fn test_sync() {
 
     for int in stack.iter() {
         assert_eq!(int.get(), 100);
+    }
+}
+
+#[test]
+fn test_iter_size_hint() {
+    let mut stack = DynStack::<dyn Fn() -> usize>::new();
+    {
+        let (min, max) = stack.iter().size_hint();
+        assert_eq!(min, 0);
+        assert_eq!(max, Some(0));
+        assert_eq!(stack.iter().len(), 0);
+    }
+    {
+        let (min, max) = stack.iter_mut().size_hint();
+        assert_eq!(min, 0);
+        assert_eq!(max, Some(0));
+        assert_eq!(stack.iter_mut().len(), 0);
+    }
+
+    for i in 0..10 {
+        dyn_push!(stack, move || i);
+    }
+
+    {
+        let mut iter = stack.iter();
+        let (min, max) = iter.size_hint();
+        assert_eq!(min, 10);
+        assert_eq!(max, Some(10));
+        assert_eq!(iter.len(), 10);
+
+        iter.next();
+        let (min, max) = iter.size_hint();
+        assert_eq!(min, 9);
+        assert_eq!(max, Some(9));
+        assert_eq!(iter.len(), 9);
+    }
+    {
+        let mut iter = stack.iter_mut();
+        let (min, max) = iter.size_hint();
+        assert_eq!(min, 10);
+        assert_eq!(max, Some(10));
+        assert_eq!(iter.len(), 10);
+
+        iter.next();
+        let (min, max) = iter.size_hint();
+        assert_eq!(min, 9);
+        assert_eq!(max, Some(9));
+        assert_eq!(iter.len(), 9);
     }
 }
