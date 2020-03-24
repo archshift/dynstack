@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add support for building without the standard library.
 - Add a `const fn`, `DynStack::new_unchecked`. Allows static initialization. This makes the
   minimum required compiler version 1.39.
+- Implement `Iterator::size_hint` and `ExactSizeIterator` for `DynStackIter` and `DynStackIterMut`.
 
 ### Changed
 - Don't allocate memory in `DynStack::new`. Postpone allocation until the first push.
