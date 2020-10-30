@@ -304,6 +304,17 @@ impl<T: ?Sized> DynStack<T> {
         true
     }
 
+    /// mem::forget the last trait object from the stack.
+    /// Returns true if any items were forgotten.
+    pub fn forget_last(&mut self) -> bool {
+        if let Some((last_offs, _)) = self.offs_table.pop() {
+            self.dyn_size = last_offs;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Retrieve a trait object reference at the provided index.
     pub fn get<'a>(&'a self, index: usize) -> Option<&'a T> {
         let item = self.offs_table.get(index)?;
