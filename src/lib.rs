@@ -410,11 +410,37 @@ impl<T: ?Sized> Drop for DynStack<T> {
 #[macro_export]
 macro_rules! dyn_push {
     { $stack:expr, $item:expr } => {{
-        let mut t = $item;
+        use $crate::MustBeDynStack;
 
-        unsafe { $stack.push(&mut t) };
+        let mut t = $item;
+        let s: &mut $crate::DynStack<_> = $stack.identity();
+
+        // SAFETY: `s` is guaranteed to be DynStack, and no expr metavariables are expanded in unsafe block.
+        unsafe { s.push(&mut t) };
+
         core::mem::forget(t);
     }}
+}
+
+mod private {
+    pub trait Sealed {}
+}
+
+/// This trait is only implemented for [`DynStack`] and is used by the [`dyn_push`] macro to only allow [`DynStack`] as argument.
+/// This is needed because its push method is unsafe and the macro wraps the call in an unsafe block.
+///
+/// If it were to allow you to pass in any type, you could pass your own struct with an unsafe push method and have this macro
+/// call the unsafe method in a hidden unsafe block.
+pub trait MustBeDynStack: private::Sealed {
+    /// A simple identity function that serves both as a check and to let you pass both `stack` and `&mut stack` as argument,
+    /// autoref will help by automatically inserting the `&mut` as needed.
+    fn identity(&mut self) -> &mut Self;
+}
+impl<T: ?Sized> private::Sealed for DynStack<T> {}
+impl<T: ?Sized> MustBeDynStack for DynStack<T> {
+    fn identity(&mut self) -> &mut Self {
+        self
+    }
 }
 
 #[test]
